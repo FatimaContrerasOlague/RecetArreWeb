@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0 --install-dir .dotnet",
-  "buildCommand": "export DOTNET_ROOT=$PWD/.dotnet && export PATH=$DOTNET_ROOT:$PATH && dotnet --info && if [ -f RecetArreWeb/RecetArreWeb.csproj ]; then dotnet publish RecetArreWeb/RecetArreWeb.csproj -c Release -o publish; else dotnet publish RecetArreWeb.csproj -c Release -o publish; fi",
+  "buildCommand": "export DOTNET_ROOT=$PWD/.dotnet && export PATH=$DOTNET_ROOT:$PATH && dotnet publish RecetArreWeb/RecetArreWeb.csproj -c Release -o publish",
   "outputDirectory": "publish/wwwroot",
   "routes": [
     { "src": "/(.*)", "dest": "/index.html" }
