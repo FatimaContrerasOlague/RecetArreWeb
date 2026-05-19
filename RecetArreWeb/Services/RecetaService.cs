@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using RecetArreWeb.DTOs;
 
 namespace RecetArreWeb.Services
@@ -26,7 +27,15 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var recetas = await httpClient.GetFromJsonAsync<List<RecetaDto>>(endpoint);
+                var response = await httpClient.GetAsync(endpoint);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error al obtener recetas: {response.StatusCode}");
+                    return new List<RecetaDto>();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var recetas = JsonSerializer.Deserialize<List<RecetaDto>>(json, JsonOptions.Default);
                 return recetas ?? new List<RecetaDto>();
             }
             catch (Exception ex)
@@ -40,7 +49,15 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                return await httpClient.GetFromJsonAsync<RecetaDto>($"{endpoint}/{id}");
+                var response = await httpClient.GetAsync($"{endpoint}/{id}");
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error al obtener receta {id}: {response.StatusCode}");
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<RecetaDto>(json, JsonOptions.Default);
             }
             catch (Exception ex)
             {
@@ -53,7 +70,7 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var response = await httpClient.PostAsJsonAsync(endpoint, recetaDto);
+                var response = await httpClient.PostAsJsonAsync(endpoint, recetaDto, JsonOptions.Default);
                 if (!response.IsSuccessStatusCode)
                 {
                     var error = await response.Content.ReadAsStringAsync();
@@ -61,7 +78,8 @@ namespace RecetArreWeb.Services
                     return null;
                 }
 
-                return await response.Content.ReadFromJsonAsync<RecetaDto>();
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<RecetaDto>(json, JsonOptions.Default);
             }
             catch (Exception ex)
             {
@@ -74,7 +92,7 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var response = await httpClient.PutAsJsonAsync($"{endpoint}/{id}", recetaDto);
+                var response = await httpClient.PutAsJsonAsync($"{endpoint}/{id}", recetaDto, JsonOptions.Default);
                 return response.IsSuccessStatusCode;
             }
             catch (Exception ex)

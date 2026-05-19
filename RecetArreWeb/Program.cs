@@ -5,7 +5,6 @@ using RecetArreWeb;
 using RecetArreWeb.Auth;
 using RecetArreWeb.Handlers;
 using RecetArreWeb.Services;
-using static System.Net.WebRequestMethods;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -24,9 +23,9 @@ builder.Services.AddScoped<HttpClient>(sp =>
 
     return new HttpClient(handler)
     {
-
-        BaseAddress = new Uri("https://FCOBF2026.somee.com")
         // BaseAddress = new Uri("https://localhost:7019/")
+        //BaseAddress = new Uri("https://Prueba20261MMM.somee.com")
+        BaseAddress = new Uri("https://FCOBF2026.somee.com")
     };
 });
 
@@ -37,7 +36,9 @@ builder.Services.AddScoped<ICategoriaService, CategoriaService>();
 builder.Services.AddScoped<IRecetaService, RecetaService>();
 builder.Services.AddScoped<IComentarioService, ComentarioService>();
 builder.Services.AddScoped<IRatingService, RatingService>();
+//builder.Services.AddScoped<IRankingService, RankingService>();
 //TODO: Todos los demas servicios ejemplo ICategoriaService, IIngredienteService
+
 
 // Configurar autenticacion
 builder.Services.AddAuthorizationCore();

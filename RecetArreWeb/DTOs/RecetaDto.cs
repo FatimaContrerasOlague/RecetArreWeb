@@ -1,18 +1,38 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace RecetArreWeb.DTOs
 {
     public class RecetaDto
     {
+        [JsonPropertyName("id")]
         public int Id { get; set; }
+        
+        [JsonPropertyName("titulo")]
         public string Titulo { get; set; } = default!;
+        
+        [JsonPropertyName("descripcion")]
         public string? Descripcion { get; set; }
+        
+        [JsonPropertyName("instrucciones")]
         public string Instrucciones { get; set; } = default!;
+        
+        [JsonPropertyName("tiempoPreparacionMinutos")]
         public int TiempoPreparacionMinutos { get; set; }
+        
+        [JsonPropertyName("tiempoCoccionMinutos")]
         public int TiempoCoccionMinutos { get; set; }
+        
+        [JsonPropertyName("porciones")]
         public int Porciones { get; set; }
+        
+        [JsonPropertyName("estaPublicado")]
         public bool EstaPublicado { get; set; }
+        
+        [JsonPropertyName("creadoUtc")]
         public DateTime CreadoUtc { get; set; }
+        
+        [JsonPropertyName("modificadoUtc")]
         public DateTime ModificadoUtc { get; set; }
     }
 

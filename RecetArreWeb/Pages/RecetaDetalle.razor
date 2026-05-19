@@ -9,11 +9,12 @@
 @inject IRecetaService recetaService
 @inject IComentarioService comentarioService
 @inject IRatingService ratingService
+@inject ITokenService tokenService
 @inject AuthenticationStateProvider authStateProvider
 @inject NavigationManager Navigation
 
 @attribute [Authorize]
-<PageTitle>Receta - Preparación</PageTitle>
+<PageTitle>Receta - Preparaciï¿½n</PageTitle>
         
 <div class="container py-4">
     @if (loading)
@@ -48,16 +49,16 @@
                     </div>
                     <div class="text-end">
                         <small class="text-muted d-block">Porciones: @receta.Porciones</small>
-                        <small class="text-muted d-block">Prep: @receta.TiempoPreparacionMinutos min | Cocción: @receta.TiempoCoccionMinutos min</small>
+                        <small class="text-muted d-block">Prep: @receta.TiempoPreparacionMinutos min | Cocciï¿½n: @receta.TiempoCoccionMinutos min</small>
                     </div>
                 </div>
 
                 <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
                     <span class="badge bg-light text-dark border">
-                        <span class="bi bi-star-fill text-warning"></span> @promedio.ToString("0.0") (@totalRatings valoración@(totalRatings == 1 ? "" : "es"))
+                        <span class="bi bi-star-fill text-warning"></span> @promedio.ToString("0.0") (@totalRatings valoraciï¿½n@(totalRatings == 1 ? "" : "es"))
                     </span>
                     <div>
-                        <small class="text-muted d-block mb-1">Tu valoración</small>
+                        <small class="text-muted d-block mb-1">Tu valoraciï¿½n</small>
                         <div class="d-flex align-items-center gap-1">
                             @for (var estrella = 1; estrella <= 5; estrella++)
                             {
@@ -73,13 +74,13 @@
                                 </button>
                             }
                         </div>
-                        <small class="text-muted">@(yaVoto ? $"Ya calificaste esta receta con {miRating!.Estrellas} estrella{(miRating.Estrellas == 1 ? string.Empty : "s")}." : "Haz click en una estrella para votar.")</small>
+                        <small class="text-muted">@(yaVoto ? $"Ya calificaste esta receta con {miRating!.Estrellas:0.#} estrella{(Math.Abs(miRating.Estrellas - 1) < 0.0001 ? string.Empty : "s")}." : "Haz click en una estrella para votar.")</small>
                     </div>
                 </div>
 
                 <hr />
 
-                <h5>Preparación</h5>
+                <h5>Preparaciï¿½n</h5>
                 <pre style="white-space:pre-wrap;">@receta.Instrucciones</pre>
 
                 <hr />
@@ -91,7 +92,7 @@
                 }
                 else if (!comentarios.Any())
                 {
-                    <div class="text-muted mb-3">Aún no hay comentarios.</div>
+                    <div class="text-muted mb-3">Aï¿½n no hay comentarios.</div>
                 }
                 else
                 {
@@ -99,7 +100,7 @@
                         @foreach (var cm in comentarios)
                         {
                             <li class="mb-3">
-                                <div class="small text-muted">@cm.UsuarioNombre • @cm.CreadoUtc.ToLocalTime().ToString("g")</div>
+                                <div class="small text-muted">@cm.UsuarioNombre ï¿½ @cm.CreadoUtc.ToLocalTime().ToString("g")</div>
                                 <div>@cm.Contenido</div>
                             </li>
                         }
@@ -140,12 +141,27 @@
 
     private async Task CargarUsuarioActual()
     {
+        var storedUserId = await tokenService.ObtenerUsuarioId();
+        if (!string.IsNullOrWhiteSpace(storedUserId))
+        {
+            usuarioIdActual = storedUserId;
+            Console.WriteLine($"UsuarioIdActual (localStorage): {usuarioIdActual}");
+            return;
+        }
+
         var authState = await authStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
         usuarioIdActual = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? user.FindFirst("userId")?.Value
+            ?? user.FindFirst("id")?.Value
             ?? user.FindFirst("sub")?.Value
-            ?? user.FindFirst("nameid")?.Value;
+            ?? user.FindFirst("nameid")?.Value
+            ?? user.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value
+            ?? user.FindFirst("uid")?.Value
+            ?? user.Identity?.Name;
+            
+        Console.WriteLine($"UsuarioIdActual (claims): {usuarioIdActual}");
     }
 
     private async Task Cargar()
@@ -197,19 +213,26 @@
             comentarios ??= new List<ComentarioDto>();
             comentarios.Insert(0, creado);
             nuevoComentario = "";
+            StateHasChanged();
         }
         else
         {
-            errorMessage = "No se pudo crear el comentario. Verifica que estés autenticado.";
+            errorMessage = "No se pudo crear el comentario. Verifica que estï¿½s autenticado.";
+            StateHasChanged();
         }
     }
 
     private async Task Votar(int valor)
     {
         if (receta == null) return;
+        if (string.IsNullOrWhiteSpace(usuarioIdActual))
+        {
+            usuarioIdActual = await tokenService.ObtenerUsuarioId();
+        }
         if (ObtenerMiRating() is not null)
         {
             errorMessage = "Ya calificaste esta receta.";
+            StateHasChanged();
             return;
         }
 
@@ -224,12 +247,14 @@
 
         if (creado is null)
         {
-            errorMessage = "No se pudo guardar la valoración. Verifica que hayas iniciado sesión o que no hayas votado antes.";
+            errorMessage = "No se pudo guardar la valoraciï¿½n. Verifica que hayas iniciado sesiï¿½n o que no hayas votado antes.";
+            StateHasChanged();
             return;
         }
 
         ratings = await ratingService.ObtenerPorReceta(receta.Id);
         hoverRating = 0;
+        StateHasChanged();
     }
 
     private void EstablecerHoverRating(int valor)

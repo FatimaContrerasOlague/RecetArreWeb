@@ -7,18 +7,19 @@
 @inject IRecetaService recetaService
 @inject IComentarioService comentarioService
 @inject IRatingService ratingService
+@inject ITokenService tokenService
 @inject AuthenticationStateProvider authStateProvider
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
-<PageTitle>Gestión de Recetas</PageTitle>
+<PageTitle>Recetas</PageTitle>
 
 <div class="container-fluid py-4">
     <div class="row mb-4">
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h1 class="h3 text-brand mb-1">Gestión de Recetas</h1>
+                    <h1 class="h3 text-brand mb-1">Recetas</h1>
                     <p class="text-muted mb-0">Administra tus recetas</p>
                 </div>
                 <button class="btn btn-brand" @onclick="AbrirModalCrear">
@@ -95,6 +96,7 @@
                 var miRating = ObtenerMiRating(receta.Id);
                 var estrellasActivas = ObtenerEstrellasActivas(receta.Id, miRating);
                 var yaVoto = miRating is not null;
+                comentariosNuevos.TryAdd(receta.Id, string.Empty);
 
                 <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-3">
                     <div class="card h-100 border-0 shadow-sm">
@@ -143,7 +145,36 @@
                                         </button>
                                     }
                                 </div>
-                                <small class="text-muted">@(yaVoto ? $"Ya calificaste con {miRating!.Estrellas} estrella{(miRating.Estrellas == 1 ? string.Empty : "s")}." : "Haz click en una estrella para votar.")</small>
+                                <small class="text-muted">@(yaVoto ? $"Ya calificaste con {miRating!.Estrellas:0.#} estrella{(Math.Abs(miRating.Estrellas - 1) < 0.0001 ? string.Empty : "s")}." : "Haz click en una estrella para votar.")</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <small class="text-muted d-block mb-1">Comentarios</small>
+                                @if (comentarios.Count == 0)
+                                {
+                                    <div class="small text-muted">Aún no hay comentarios.</div>
+                                }
+                                else
+                                {
+                                    <ul class="list-unstyled mb-2">
+                                        @foreach (var cm in comentarios.Take(2))
+                                        {
+                                            <li class="small mb-2">
+                                                <div class="text-muted">@cm.UsuarioNombre · @cm.CreadoUtc.ToLocalTime().ToString("g")</div>
+                                                <div>@cm.Contenido</div>
+                                            </li>
+                                        }
+                                    </ul>
+                                    if (comentarios.Count > 2)
+                                    {
+                                        <button class="btn btn-link p-0 small link-brand" @onclick="() => IrADetalle(receta.Id)">Ver todos</button>
+                                    }
+                                }
+
+                                <div class="input-group input-group-sm mt-2">
+                                    <input class="form-control" placeholder="Escribe un comentario..." @bind="comentariosNuevos[receta.Id]" />
+                                    <button class="btn btn-outline-primary" @onclick="() => AgregarComentario(receta.Id)">Comentar</button>
+                                </div>
                             </div>
 
                             <div class="border-top pt-2 mt-auto">
@@ -278,6 +309,7 @@
     private Dictionary<int, List<ComentarioDto>> comentariosPorReceta = new();
     private Dictionary<int, List<RatingDto>> ratingsPorReceta = new();
     private Dictionary<int, int> hoverRatingsPorReceta = new();
+    private Dictionary<int, string> comentariosNuevos = new();
     private string? usuarioIdActual;
     private string busqueda = "";
     private bool mostrarModal = false;
@@ -314,12 +346,27 @@
 
     private async Task CargarUsuarioActual()
     {
+        var storedUserId = await tokenService.ObtenerUsuarioId();
+        if (!string.IsNullOrWhiteSpace(storedUserId))
+        {
+            usuarioIdActual = storedUserId;
+            Console.WriteLine($"UsuarioIdActual (localStorage): {usuarioIdActual}");
+            return;
+        }
+
         var authState = await authStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
         usuarioIdActual = user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? user.FindFirst("userId")?.Value
+            ?? user.FindFirst("id")?.Value
             ?? user.FindFirst("sub")?.Value
-            ?? user.FindFirst("nameid")?.Value;
+            ?? user.FindFirst("nameid")?.Value
+            ?? user.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value
+            ?? user.FindFirst("uid")?.Value
+            ?? user.Identity?.Name;
+            
+        Console.WriteLine($"UsuarioIdActual (claims): {usuarioIdActual}");
     }
 
     private async Task CargarRecetas()
@@ -513,9 +560,14 @@
 
     private async Task Votar(int recetaId, int valor)
     {
+        if (string.IsNullOrWhiteSpace(usuarioIdActual))
+        {
+            usuarioIdActual = await tokenService.ObtenerUsuarioId();
+        }
         if (ObtenerMiRating(recetaId) is not null)
         {
             mensajeError = "Ya calificaste esta receta.";
+            StateHasChanged();
             return;
         }
 
@@ -532,12 +584,53 @@
         if (creado is null)
         {
             mensajeError = "No se pudo guardar la valoración. Verifica que hayas iniciado sesión o que no hayas votado antes.";
+            StateHasChanged();
             return;
         }
 
         await CargarRatingsDeReceta(recetaId);
         hoverRatingsPorReceta.Remove(recetaId);
         mensajeExito = "Valoración guardada exitosamente.";
+        StateHasChanged();
+    }
+
+    private async Task AgregarComentario(int recetaId)
+    {
+        if (!comentariosNuevos.TryGetValue(recetaId, out var contenido) || string.IsNullOrWhiteSpace(contenido))
+        {
+            mensajeError = "Escribe un comentario antes de enviar.";
+            mensajeExito = string.Empty;
+            StateHasChanged();
+            return;
+        }
+
+        mensajeError = string.Empty;
+        mensajeExito = string.Empty;
+
+        var dto = new ComentarioCreacionDto
+        {
+            Contenido = contenido.Trim(),
+            RecetaId = recetaId
+        };
+
+        var creado = await comentarioService.CrearComentario(dto);
+        if (creado == null)
+        {
+            mensajeError = "No se pudo crear el comentario. Verifica que estés autenticado.";
+            StateHasChanged();
+            return;
+        }
+
+        if (!comentariosPorReceta.TryGetValue(recetaId, out var lista))
+        {
+            lista = new List<ComentarioDto>();
+            comentariosPorReceta[recetaId] = lista;
+        }
+
+        lista.Insert(0, creado);
+        comentariosNuevos[recetaId] = string.Empty;
+        mensajeExito = "Comentario agregado exitosamente.";
+        StateHasChanged();
     }
 
     private void EstablecerHoverRating(int recetaId, int valor)
@@ -594,7 +687,7 @@
         return ObtenerRatings(recetaId).Count;
     }
 
-    private int ObtenerEstrellasActivas(int recetaId, RatingDto? miRating)
+    private double ObtenerEstrellasActivas(int recetaId, RatingDto? miRating)
     {
         if (hoverRatingsPorReceta.TryGetValue(recetaId, out var hover))
         {

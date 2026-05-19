@@ -1,13 +1,24 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace RecetArreWeb.DTOs
 {
     public class RatingDto
     {
+        [JsonPropertyName("id")]
         public int Id { get; set; }
-        public int Estrellas { get; set; }
+        
+        [JsonPropertyName("estrellas")]
+        public double Estrellas { get; set; }
+        
+        [JsonPropertyName("usuarioId")]
         public string UsuarioId { get; set; } = default!;
+        
+        [JsonPropertyName("recetaId")]
         public int RecetaId { get; set; }
+
+        [JsonPropertyName("creadoUtc")]
+        public DateTime CreadoUtc { get; set; }
     }
 
     public class RatingCreacionDto

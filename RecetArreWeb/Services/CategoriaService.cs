@@ -1,4 +1,3 @@
-
 using System.Net.Http.Json;
 using System.Text.Json;
 using RecetArreWeb.DTOs;
@@ -27,7 +26,15 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var categorias = await httpClient.GetFromJsonAsync<List<CategoriaDto>>(endpoint);
+                var response = await httpClient.GetAsync(endpoint);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error al obtener categorias: {response.StatusCode}");
+                    return new List<CategoriaDto>();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                var categorias = JsonSerializer.Deserialize<List<CategoriaDto>>(json, JsonOptions.Default);
                 return categorias ?? new List<CategoriaDto>();
             }
             catch (Exception ex)
@@ -41,7 +48,15 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                return await httpClient.GetFromJsonAsync<CategoriaDto>($"{endpoint}/{id}");
+                var response = await httpClient.GetAsync($"{endpoint}/{id}");
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error al obtener categoria {id}: {response.StatusCode}");
+                    return null;
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                return JsonSerializer.Deserialize<CategoriaDto>(json, JsonOptions.Default);
             }
             catch (Exception ex)
             {
@@ -53,10 +68,11 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var response = await httpClient.PostAsJsonAsync(endpoint, categoriaDto);
+                var response = await httpClient.PostAsJsonAsync(endpoint, categoriaDto, JsonOptions.Default);
                 if (response.IsSuccessStatusCode)
                 {
-                    return await response.Content.ReadFromJsonAsync<CategoriaDto>();
+                    var json = await response.Content.ReadAsStringAsync();
+                    return JsonSerializer.Deserialize<CategoriaDto>(json, JsonOptions.Default);
                 }
 
                 var error = await response.Content.ReadAsStringAsync();
@@ -74,7 +90,7 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var response = await httpClient.PutAsJsonAsync($"{endpoint}/{id}", categoriaDto);
+                var response = await httpClient.PutAsJsonAsync($"{endpoint}/{id}", categoriaDto, JsonOptions.Default);
                 return response.IsSuccessStatusCode;
             }
             catch (Exception ex)

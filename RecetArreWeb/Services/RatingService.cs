@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using RecetArreWeb.DTOs;
 
 namespace RecetArreWeb.Services
@@ -24,7 +25,16 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var ratings = await httpClient.GetFromJsonAsync<List<RatingDto>>(endpoint);
+                var response = await httpClient.GetAsync(endpoint);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error al obtener ratings: {response.StatusCode}");
+                    return new List<RatingDto>();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"JSON Response: {json}");
+                var ratings = JsonSerializer.Deserialize<List<RatingDto>>(json, JsonOptions.Default);
                 return ratings ?? new List<RatingDto>();
             }
             catch (Exception ex)
@@ -38,7 +48,16 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var ratings = await httpClient.GetFromJsonAsync<List<RatingDto>>($"{endpoint}/receta/{recetaId}");
+                var response = await httpClient.GetAsync($"{endpoint}/receta/{recetaId}");
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error al obtener ratings de la receta {recetaId}: {response.StatusCode}");
+                    return new List<RatingDto>();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"JSON Response: {json}");
+                var ratings = JsonSerializer.Deserialize<List<RatingDto>>(json, JsonOptions.Default);
                 return ratings ?? new List<RatingDto>();
             }
             catch (Exception ex)
@@ -52,19 +71,35 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var response = await httpClient.PostAsJsonAsync(endpoint, ratingDto);
+                var usuarioId = string.IsNullOrWhiteSpace(ratingDto.UsuarioId) ? null : ratingDto.UsuarioId;
+                var payload = new
+                {
+                    recetaId = ratingDto.RecetaId,
+                    estrellas = ratingDto.Estrellas,
+                    usuarioId,
+                    userId = usuarioId
+                };
+
+                var response = await httpClient.PostAsJsonAsync(endpoint, payload, JsonOptions.Default);
                 if (!response.IsSuccessStatusCode)
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"Error al crear rating: {error}");
+                    Console.WriteLine($"Error al crear rating (Status: {response.StatusCode}): {error}");
                     return null;
                 }
 
-                return await response.Content.ReadFromJsonAsync<RatingDto>();
+                var json = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"JSON Response: {json}");
+                var result = JsonSerializer.Deserialize<RatingDto>(json, JsonOptions.Default);
+                if (result != null)
+                {
+                    Console.WriteLine($"Rating creado exitosamente: {result.Id}");
+                }
+                return result;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error al crear rating: {ex.Message}");
+                Console.WriteLine($"Error al crear rating: {ex.Message}\n{ex.StackTrace}");
                 return null;
             }
         }

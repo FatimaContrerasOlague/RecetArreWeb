@@ -1,0 +1,332 @@
+@page "/rankings"
+@using System.Globalization
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject IRecetaService recetaService
+@inject IRatingService ratingService
+@inject NavigationManager Navigation
+
+<PageTitle>Rankings</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 text-brand mb-1">Rankings semanales</h1>
+                    <p class="text-muted mb-0">Top 3 de recetas mejor valoradas por semana.</p>
+                </div>
+                <button class="btn btn-brand" @onclick="CargarDatos">
+                    <span class="bi bi-arrow-clockwise"></span> Recargar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(mensajeError))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>Error:</strong> @mensajeError
+            <button type="button" class="btn-close" @onclick="() => mensajeError = string.Empty"></button>
+        </div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <label class="form-label mb-1">Semana</label>
+                            <select class="form-select" @bind="SemanaSeleccionadaKey">
+                                @foreach (var semana in semanas)
+                                {
+                                    <option value="@semana.Key">@semana.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-light text-dark border">
+                                    <span class="bi bi-calendar-week"></span> @TituloSemana
+                                </span>
+                                <span class="badge bg-light text-dark border">
+                                    <span class="bi bi-star-fill text-warning"></span> @totalRatingsSemana valoraciones
+                                </span>
+                                <span class="badge bg-light text-dark border">
+                                    <span class="bi bi-collection"></span> @totalRecetasSemana recetas
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        @if (cargando)
+        {
+            <div class="col-12">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-brand" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="text-muted mt-3">Cargando rankings...</p>
+                </div>
+            </div>
+        }
+        else if (!topRecetas.Any())
+        {
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <h5 class="alert-heading">Sin rankings</h5>
+                    <p class="mb-0">No hay valoraciones registradas para esta semana.</p>
+                </div>
+            </div>
+        }
+        else
+        {
+            @foreach (var item in topRecetas)
+            {
+                <div class="col-12 col-md-6 col-lg-4 mb-3">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body d-flex flex-column">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="badge @ObtenerClaseRank(item.Rank)">
+                                    <span class="bi bi-trophy-fill"></span> #@item.Rank
+                                </span>
+                                <span class="badge bg-light text-dark border">
+                                    <span class="bi bi-star-fill text-warning"></span> @item.Promedio.ToString("0.0")
+                                </span>
+                            </div>
+                            <h5 class="text-brand mb-1">@item.Titulo</h5>
+                            <p class="text-muted small flex-grow-1">
+                                @item.Descripcion
+                            </p>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <span class="badge bg-light text-dark border">
+                                    <span class="bi bi-bar-chart-fill"></span> @item.TotalRatings valoraciones
+                                </span>
+                                <span class="badge bg-light text-dark border">
+                                    <span class="bi bi-calendar-event"></span> @item.SemanaLabel
+                                </span>
+                            </div>
+                            <button class="btn btn-outline-primary btn-sm mt-auto" @onclick="() => IrADetalle(item.RecetaId)">
+                                Ver receta
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly CultureInfo CultureEs = new("es-MX");
+    private List<RecetaDto>? recetas;
+    private List<RatingDto>? ratings;
+    private List<WeekOption> semanas = new();
+    private List<RankingItem> topRecetas = new();
+    private bool cargando = true;
+    private string mensajeError = string.Empty;
+    private string? semanaSeleccionadaKey;
+    private int totalRatingsSemana;
+    private int totalRecetasSemana;
+
+    private string? SemanaSeleccionadaKey
+    {
+        get => semanaSeleccionadaKey;
+        set
+        {
+            if (semanaSeleccionadaKey == value)
+            {
+                return;
+            }
+
+            semanaSeleccionadaKey = value;
+            ActualizarRanking();
+        }
+    }
+
+    private string TituloSemana
+    {
+        get
+        {
+            var semana = semanas.FirstOrDefault(s => s.Key == semanaSeleccionadaKey);
+            if (semana == null)
+            {
+                return "Semana seleccionada";
+            }
+
+            return $"Del {semana.Inicio.ToString("dd MMM yyyy", CultureEs)} al {semana.Fin.ToString("dd MMM yyyy", CultureEs)}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarDatos();
+    }
+
+    private async Task CargarDatos()
+    {
+        cargando = true;
+        mensajeError = string.Empty;
+
+        try
+        {
+            recetas = await recetaService.ObtenerTodas();
+            ratings = await ratingService.ObtenerTodos();
+            ConstruirSemanas();
+            ActualizarRanking();
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error al cargar rankings: {ex.Message}";
+            topRecetas = new List<RankingItem>();
+            semanas = new List<WeekOption>();
+        }
+        finally
+        {
+            cargando = false;
+        }
+    }
+
+    private void ConstruirSemanas()
+    {
+        var fechas = (ratings ?? new List<RatingDto>())
+            .Select(r => ConvertirFechaLocal(r.CreadoUtc))
+            .ToList();
+
+        var weekStarts = fechas
+            .Select(ObtenerInicioSemana)
+            .Distinct()
+            .OrderByDescending(d => d)
+            .ToList();
+
+        if (!weekStarts.Any())
+        {
+            weekStarts.Add(ObtenerInicioSemana(DateTime.Now));
+        }
+
+        semanas = weekStarts.Select(ws => new WeekOption(ws, ws.AddDays(6))).ToList();
+
+        if (string.IsNullOrWhiteSpace(semanaSeleccionadaKey) || semanas.All(s => s.Key != semanaSeleccionadaKey))
+        {
+            semanaSeleccionadaKey = semanas.First().Key;
+        }
+    }
+
+    private void ActualizarRanking()
+    {
+        if (ratings == null || recetas == null || !semanas.Any())
+        {
+            topRecetas = new List<RankingItem>();
+            totalRatingsSemana = 0;
+            totalRecetasSemana = 0;
+            return;
+        }
+
+        var semana = semanas.FirstOrDefault(s => s.Key == semanaSeleccionadaKey) ?? semanas.First();
+        var inicio = semana.Inicio;
+        var fin = semana.Inicio.AddDays(7);
+
+        var ratingsSemana = ratings
+            .Where(r =>
+            {
+                var fecha = ConvertirFechaLocal(r.CreadoUtc);
+                return fecha >= inicio && fecha < fin;
+            })
+            .ToList();
+
+        totalRatingsSemana = ratingsSemana.Count;
+        totalRecetasSemana = ratingsSemana.Select(r => r.RecetaId).Distinct().Count();
+
+        var recetasPorId = recetas.ToDictionary(r => r.Id);
+
+        var ranking = ratingsSemana
+            .GroupBy(r => r.RecetaId)
+            .Select(g => new
+            {
+                RecetaId = g.Key,
+                Promedio = g.Average(r => r.Estrellas),
+                Total = g.Count()
+            })
+            .OrderByDescending(r => r.Promedio)
+            .ThenByDescending(r => r.Total)
+            .ThenBy(r => recetasPorId.TryGetValue(r.RecetaId, out var receta) ? receta.Titulo : $"Receta {r.RecetaId}")
+            .Take(3)
+            .ToList();
+
+        topRecetas = ranking.Select((item, index) =>
+        {
+            recetasPorId.TryGetValue(item.RecetaId, out var receta);
+            return new RankingItem
+            {
+                Rank = index + 1,
+                RecetaId = item.RecetaId,
+                Titulo = receta?.Titulo ?? $"Receta #{item.RecetaId}",
+                Descripcion = string.IsNullOrWhiteSpace(receta?.Descripcion) ? "Sin descripción." : receta!.Descripcion!,
+                Promedio = item.Promedio,
+                TotalRatings = item.Total,
+                SemanaLabel = semana.Label
+            };
+        }).ToList();
+    }
+
+    private void IrADetalle(int recetaId)
+    {
+        Navigation.NavigateTo($"/receta/{recetaId}");
+    }
+
+    private static DateTime ConvertirFechaLocal(DateTime fecha)
+    {
+        return fecha.Kind == DateTimeKind.Utc ? fecha.ToLocalTime() : fecha;
+    }
+
+    private static DateTime ObtenerInicioSemana(DateTime fecha)
+    {
+        var date = fecha.Date;
+        var diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+        return date.AddDays(-diff);
+    }
+
+    private static string ObtenerClaseRank(int rank)
+    {
+        return rank switch
+        {
+            1 => "bg-warning text-dark",
+            2 => "bg-primary",
+            3 => "bg-secondary",
+            _ => "bg-light text-dark border"
+        };
+    }
+
+    private sealed class WeekOption
+    {
+        public WeekOption(DateTime inicio, DateTime fin)
+        {
+            Inicio = inicio;
+            Fin = fin;
+            Key = inicio.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            Label = $"{inicio.ToString("dd MMM yyyy", CultureEs)} - {fin.ToString("dd MMM yyyy", CultureEs)}";
+        }
+
+        public string Key { get; }
+        public DateTime Inicio { get; }
+        public DateTime Fin { get; }
+        public string Label { get; }
+    }
+
+    private sealed class RankingItem
+    {
+        public int Rank { get; set; }
+        public int RecetaId { get; set; }
+        public string Titulo { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public double Promedio { get; set; }
+        public int TotalRatings { get; set; }
+        public string SemanaLabel { get; set; } = string.Empty;
+    }
+}

@@ -1,3 +1,6 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
+using System.Security.Claims;
 using Microsoft.JSInterop;
 
 namespace RecetArreWeb.Services
@@ -5,7 +8,9 @@ namespace RecetArreWeb.Services
     public interface ITokenService
     {
         Task GuardarToken(string token, DateTime expiracion);
+        Task GuardarUsuarioId(string usuarioId);
         Task<string?> ObtenerToken();
+        Task<string?> ObtenerUsuarioId();
         Task<DateTime?> ObtenerExpiracion();
         Task<bool> EstaAutenticado();
         Task EliminarToken();
@@ -16,6 +21,7 @@ namespace RecetArreWeb.Services
         private readonly IJSRuntime jSRuntime;
         private const string TOKEN_KEY = "authToken";
         private const string EXPIRACION_KEY = "tokenExpiracion";
+        private const string USUARIO_ID_KEY = "usuarioId";
 
         public TokenService(IJSRuntime jSRuntime)
         {
@@ -25,6 +31,7 @@ namespace RecetArreWeb.Services
         {
             await jSRuntime.InvokeVoidAsync("localStorage.removeItem", TOKEN_KEY);
             await jSRuntime.InvokeVoidAsync("localStorage.removeItem", EXPIRACION_KEY);
+            await jSRuntime.InvokeVoidAsync("localStorage.removeItem", USUARIO_ID_KEY);
 
         }
 
@@ -41,6 +48,17 @@ namespace RecetArreWeb.Services
             await jSRuntime.InvokeVoidAsync("localStorage.setItem",EXPIRACION_KEY,expiracion.ToString("o"));
             //Formato ISO 8601 (2024-12-15T10:30:00Z)
             
+        }
+
+        public async Task GuardarUsuarioId(string usuarioId)
+        {
+            if (string.IsNullOrWhiteSpace(usuarioId))
+            {
+                Console.WriteLine("UsuarioId vacío; no se guardará en localStorage.");
+                return;
+            }
+
+            await jSRuntime.InvokeVoidAsync("localStorage.setItem", USUARIO_ID_KEY, usuarioId);
         }
 
         public async Task<DateTime?> ObtenerExpiracion()
@@ -90,6 +108,60 @@ namespace RecetArreWeb.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"Error al obtener el token: {ex.Message}");
+                return null;
+            }
+        }
+
+        public async Task<string?> ObtenerUsuarioId()
+        {
+            try
+            {
+                var usuarioId = await jSRuntime.InvokeAsync<string?>("localStorage.getItem", USUARIO_ID_KEY);
+                if (!string.IsNullOrWhiteSpace(usuarioId))
+                {
+                    return usuarioId;
+                }
+
+                var token = await ObtenerToken();
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    return null;
+                }
+
+                var extraido = ExtraerUsuarioIdDelToken(token);
+                if (!string.IsNullOrWhiteSpace(extraido))
+                {
+                    await GuardarUsuarioId(extraido);
+                }
+
+                return extraido;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al obtener el usuarioId: {ex.Message}");
+                return null;
+            }
+        }
+
+        private static string? ExtraerUsuarioIdDelToken(string token)
+        {
+            try
+            {
+                var handler = new JwtSecurityTokenHandler();
+                var jwtToken = handler.ReadJwtToken(token);
+                var claims = jwtToken.Claims;
+
+                return claims.FirstOrDefault(c =>
+                    c.Type == ClaimTypes.NameIdentifier ||
+                    c.Type == "sub" ||
+                    c.Type == "userId" ||
+                    c.Type == "id" ||
+                    c.Type == "uid" ||
+                    c.Type == "nameid")?.Value;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error al extraer usuarioId del token: {ex.Message}");
                 return null;
             }
         }

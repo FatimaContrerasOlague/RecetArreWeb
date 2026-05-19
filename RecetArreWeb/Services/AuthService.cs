@@ -35,6 +35,8 @@ namespace RecetArreWeb.Services
                     if(respuesta != null)
                     {
                         await tokenService.GuardarToken(respuesta.Token, respuesta.Expiracion);
+                        await tokenService.GuardarUsuarioId(respuesta.UsuarioId);
+                        await tokenService.ObtenerUsuarioId();
                         return respuesta;
                     }
                 }
@@ -68,6 +70,8 @@ namespace RecetArreWeb.Services
                     if(respuesta != null)
                     {
                         await tokenService.GuardarToken(respuesta.Token, respuesta.Expiracion);
+                        await tokenService.GuardarUsuarioId(respuesta.UsuarioId);
+                        await tokenService.ObtenerUsuarioId();
                         return respuesta;
                     }
                 }

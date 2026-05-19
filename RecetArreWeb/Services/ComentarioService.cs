@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using RecetArreWeb.DTOs;
 
 namespace RecetArreWeb.Services
@@ -24,7 +25,16 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var comentarios = await httpClient.GetFromJsonAsync<List<ComentarioDto>>(endpoint);
+                var response = await httpClient.GetAsync(endpoint);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error al obtener comentarios: {response.StatusCode}");
+                    return new List<ComentarioDto>();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"JSON Response: {json}");
+                var comentarios = JsonSerializer.Deserialize<List<ComentarioDto>>(json, JsonOptions.Default);
                 return comentarios ?? new List<ComentarioDto>();
             }
             catch (Exception ex)
@@ -38,7 +48,16 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var comentarios = await httpClient.GetFromJsonAsync<List<ComentarioDto>>($"{endpoint}/receta/{recetaId}");
+                var response = await httpClient.GetAsync($"{endpoint}/receta/{recetaId}");
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Error al obtener comentarios de la receta {recetaId}: {response.StatusCode}");
+                    return new List<ComentarioDto>();
+                }
+
+                var json = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"JSON Response: {json}");
+                var comentarios = JsonSerializer.Deserialize<List<ComentarioDto>>(json, JsonOptions.Default);
                 return comentarios ?? new List<ComentarioDto>();
             }
             catch (Exception ex)
@@ -52,19 +71,26 @@ namespace RecetArreWeb.Services
         {
             try
             {
-                var response = await httpClient.PostAsJsonAsync(endpoint, comentarioDto);
+                var response = await httpClient.PostAsJsonAsync(endpoint, comentarioDto, JsonOptions.Default);
                 if (!response.IsSuccessStatusCode)
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"Error al crear comentario: {error}");
+                    Console.WriteLine($"Error al crear comentario (Status: {response.StatusCode}): {error}");
                     return null;
                 }
 
-                return await response.Content.ReadFromJsonAsync<ComentarioDto>();
+                var json = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"JSON Response: {json}");
+                var result = JsonSerializer.Deserialize<ComentarioDto>(json, JsonOptions.Default);
+                if (result != null)
+                {
+                    Console.WriteLine($"Comentario creado exitosamente: {result.Id}");
+                }
+                return result;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error al crear comentario: {ex.Message}");
+                Console.WriteLine($"Error al crear comentario: {ex.Message}\n{ex.StackTrace}");
                 return null;
             }
         }
