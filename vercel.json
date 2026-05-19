@@ -4,6 +4,7 @@
   "buildCommand": "export DOTNET_ROOT=$PWD/.dotnet && export PATH=$DOTNET_ROOT:$PATH && dotnet publish RecetArreWeb/RecetArreWeb.csproj -c Release -o publish",
   "outputDirectory": "publish/wwwroot",
   "routes": [
+    { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
