@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "buildCommand": "dotnet publish RecetArreWeb/RecetArreWeb.csproj -c Release -o publish",
+  "outputDirectory": "publish/wwwroot",
+  "routes": [
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
